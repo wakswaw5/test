@@ -16,7 +16,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
-import praw
 import requests
 
 from _env import load_env
@@ -142,6 +141,8 @@ def main():
     client_id = os.environ.get("REDDIT_CLIENT_ID")
     client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
     if client_id and client_secret:
+        import praw  # hanya dibutuhkan di mode API
+
         reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=USER_AGENT)
         reddit.read_only = True
         posts = reddit.subreddit(args.subreddit).top(time_filter=args.time, limit=args.limit)

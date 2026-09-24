@@ -247,6 +247,11 @@ def main():
     ap.add_argument("--check", action="store_true", help="hanya cek status, tidak login")
     args = ap.parse_args()
 
+    if sys.prefix == sys.base_prefix and (ROOT / ".venv").exists():
+        print("  !! Kamu menjalankan Python sistem, bukan .venv — paket toolkit tidak akan ketemu.")
+        print("     Aktifkan dulu:  .\\.venv\\Scripts\\Activate.ps1")
+        print("     atau jalankan:  .\\.venv\\Scripts\\python.exe scripts\\login.py ...\n")
+
     load_env()
     if not ENV_FILE.exists():
         ENV_FILE.write_text((ROOT / ".env.example").read_text(encoding="utf-8"), encoding="utf-8")
