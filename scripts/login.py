@@ -66,6 +66,23 @@ def browser():
     return os.environ.get("COOKIE_BROWSER", "firefox")
 
 
+def open_url(url):
+    """Buka URL di browser yang dipilih (COOKIE_BROWSER), bukan browser default Windows."""
+    b = browser()
+    exe = {"firefox": "firefox", "chrome": "chrome", "edge": "msedge", "brave": "brave"}.get(b, b)
+    try:
+        if sys.platform == "win32":
+            # 'start <nama>' mencari program lewat registry App Paths, jadi tidak perlu ada di PATH
+            subprocess.run(["cmd", "/c", "start", "", exe, url], check=True,
+                           capture_output=True, timeout=15)
+        else:
+            subprocess.Popen([exe, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return
+    except Exception:  # noqa: BLE001 — jatuh ke browser default
+        print(f"  (tidak bisa membuka {b}, memakai browser default — pastikan login di {b})")
+        webbrowser.open(url)
+
+
 # ---------------------------------------------------------------- browser
 def setup_browser():
     hr("0. Browser untuk cookie")
@@ -175,7 +192,7 @@ def setup_instagram():
     hr("2. Instagram")
     print("  Pakai AKUN SEKUNDER khusus riset — scraping bisa bikin akun dibatasi.")
     print(f"  Buka https://www.instagram.com di {browser()} dan login.")
-    webbrowser.open("https://www.instagram.com/")
+    open_url("https://www.instagram.com/")
     input("  Tekan Enter setelah login di browser selesai... ")
     # instaloader mengimpor cookie dari browser, mendeteksi username-nya sendiri, dan
     # menyimpan sesi di folder profil user (%LOCALAPPDATA%\Instaloader), bukan di repo.
@@ -206,7 +223,7 @@ def check_x(url=X_TEST_URL):
 def setup_x():
     hr("3. X / Twitter")
     print(f"  Buka https://x.com di {browser()} dan login (akun sekunder disarankan).")
-    webbrowser.open("https://x.com/login")
+    open_url("https://x.com/login")
     input("  Tekan Enter setelah login selesai... ")
     if check_x():
         return True
@@ -229,7 +246,7 @@ def check_facebook(url=None):
 def setup_facebook():
     hr("4. Facebook")
     print(f"  Buka https://www.facebook.com di {browser()} dan login.")
-    webbrowser.open("https://www.facebook.com/")
+    open_url("https://www.facebook.com/")
     input("  Tekan Enter setelah login selesai... ")
     if check_facebook():
         return True
