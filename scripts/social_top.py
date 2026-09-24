@@ -42,9 +42,9 @@ def build_url(platform, args):
         return f"https://www.instagram.com/explore/tags/{tag}/", f"#{tag}"
     if platform == "x":
         q = pick(QUERIES_X, args.query)
+        # Catatan: X mengabaikan aksen, jadi "-même" akan meniadakan "meme" (ERROR_EMPTY_QUERY).
+        # Tweet Prancis yang cocok karena "même" disaring belakangan di is_junk().
         parts = [q, "filter:media", "-filter:retweets"]
-        if "meme" in q.lower():
-            parts.append("-même")          # "meme" cocok dengan kata Prancis "même"
         if args.min_likes:
             parts.append(f"min_faves:{args.min_likes}")
         if args.lang:
@@ -56,6 +56,14 @@ def build_url(platform, args):
                      "(contoh: --fb-page 9gag). Atau lewati facebook dengan -p instagram,x.")
         return f"https://www.facebook.com/{args.fb_page}/photos", f"page:{args.fb_page}"
     sys.exit(f"platform tidak dikenal: {platform}")
+
+
+def is_junk(rec, query):
+    """Saring hasil yang jelas bukan meme: tweet Prancis yang cocok gara-gara 'même'."""
+    text_ = (rec.get("judul") or "").lower()
+    if rec["platform"] == "x" and "meme" in query.lower() and "même" in text_ and "meme" not in text_:
+        return True
+    return False
 
 
 def media_kind(url, file_kw):
@@ -200,6 +208,7 @@ def main():
         pool = min(args.limit * 4, 100) if platform == "instagram" else args.limit
         records, ex = fetch(platform, url, label, pool, browser, args.time)
         sessions[platform] = ex.session
+        records = [r for r in records if not is_junk(r, label)]
         records = [r for r in records if (r["skor"] or 0) >= args.min_likes or r["skor"] is None]
         records.sort(key=lambda r: r["skor"] or 0, reverse=True)
         records = records[:args.limit]
