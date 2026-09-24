@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Ambil metadata post teratas dari sebuah subreddit lewat PRAW (Reddit API resmi).
 
-Tanpa kredensial: pakai endpoint JSON publik Reddit (cukup untuk top post subreddit publik).
+Tanpa kredensial: pakai extractor Reddit milik gallery-dl (tanpa login, cukup untuk subreddit publik).
 Dengan REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET di .env: pakai Reddit API resmi lewat PRAW.
 Hasil disimpan ke data/<subreddit>_<tanggal>.json. Media hanya diunduh dengan --download
 (maksimal 5 file, untuk tes).
@@ -27,7 +27,7 @@ USER_AGENT = "meme-research-toolkit/0.1 (riset tren; script PRAW)"
 MAX_DOWNLOAD = 5
 
 CREDENTIAL_HELP = """\
-Kredensial Reddit API belum diset (opsional — tanpa ini script pakai JSON publik).
+Kredensial Reddit API belum diset (opsional — tanpa ini script pakai gallery-dl).
 
 1. Buka https://www.reddit.com/prefs/apps (login dulu).
 2. Klik "create another app...", pilih tipe "script".
@@ -169,7 +169,7 @@ def main():
         mode = "Reddit API"
     else:
         # Sejak Nov 2025 Reddit tidak lagi memberi API key baru secara mandiri
-        # (Responsible Builder Policy), jadi default-nya pakai JSON publik.
+        # (Responsible Builder Policy), jadi default-nya lewat gallery-dl.
         posts = fetch_public(args.subreddit, args.time, args.limit)
         mode = "tanpa API key (via gallery-dl)"
     records = [to_record(p) for p in posts]
