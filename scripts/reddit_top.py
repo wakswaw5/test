@@ -17,6 +17,8 @@ from urllib.parse import urlparse
 import praw
 import requests
 
+from _env import load_env
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 DOWNLOAD_DIR = ROOT / "downloads"
@@ -107,6 +109,7 @@ def main():
     ap.add_argument("--download", action="store_true", help=f"unduh maksimal {MAX_DOWNLOAD} file media ke downloads/")
     args = ap.parse_args()
 
+    load_env()  # baca .env di root repo kalau ada
     client_id = os.environ.get("REDDIT_CLIENT_ID")
     client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
     if not client_id or not client_secret:

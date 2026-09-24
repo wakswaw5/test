@@ -10,6 +10,8 @@ lihat [Catatan etika & legal](#catatan-etika--legal) di bawah.
 |---|---|
 | `scripts/reddit_top.py` | Ambil N post teratas subreddit lewat Reddit API (PRAW), simpan metadata ke `data/` |
 | `scripts/gallery_dl_top.sh` | Contoh gallery-dl: unduh 3 gambar teratas harian r/memes (tanpa API key) |
+| `scripts/login.py` | Wizard login: Reddit API, Instagram, X, Facebook — kamu login sendiri, script cuma memverifikasi |
+| `setup.ps1` | Setup otomatis di Windows (venv, paket, Node, Chromium, `.env`, lalu wizard login) |
 | `node/` | Project Node.js dengan crawlee + playwright untuk scraping halaman yang butuh JavaScript |
 | `vendor/Meme_Api/` | Salinan sumber [D3vd/Meme_Api](https://github.com/D3vd/Meme_Api) sebagai referensi (Go, tidak dijalankan) |
 | `data/` | Metadata JSON hasil `reddit_top.py` (boleh di-commit) |
@@ -29,7 +31,45 @@ lihat [Catatan etika & legal](#catatan-etika--legal) di bawah.
 | crawlee + playwright | 3.18 / 1.63 | Crawler Node.js dengan browser sungguhan |
 | ffmpeg | 6.1 | Dipakai yt-dlp untuk menggabung audio/video |
 
-## Menjalankan di Windows (PowerShell)
+## Setup otomatis di Windows (cara cepat)
+
+```powershell
+git clone <url-repo-ini> meme-tools
+cd meme-tools
+.\setup.ps1
+```
+
+`setup.ps1` mencari Python 3.10+, membuat `.venv`, memasang semua paket, mengecek ffmpeg dan
+Node.js (menawarkan pemasangan lewat `winget` kalau belum ada), memasang crawlee + playwright +
+Chromium, membuat `.env` dari `.env.example`, lalu menjalankan **wizard login**.
+
+Opsi: `-SkipLogin` (setup saja), `-SkipNode` (tanpa Node.js),
+`-Python "C:\path\ke\python.exe"` (kalau Python tidak ada di PATH).
+Kalau PowerShell menolak menjalankan script: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+### Wizard login: `scripts/login.py`
+
+Kamu tinggal login satu per satu; script tidak pernah meminta password.
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts/login.py                   # semua: browser → Reddit → Instagram → X → Facebook
+python scripts/login.py --only x,facebook # sebagian
+python scripts/login.py --check           # cek mana yang masih valid
+```
+
+| Langkah | Yang kamu lakukan | Yang disimpan |
+|---|---|---|
+| Browser | Pilih browser tempat login (Firefox paling stabil) | `COOKIE_BROWSER` di `.env` |
+| Reddit | Buat app tipe *script* di halaman yang dibuka, tempel client_id + secret | `REDDIT_CLIENT_ID/SECRET` di `.env` |
+| Instagram | Login di browser, ketik username | sesi di `%LOCALAPPDATA%\Instaloader` (di luar repo) |
+| X | Login di browser, tekan Enter | tidak ada — cookie dibaca dari browser saat dipakai |
+| Facebook | Login di browser, tekan Enter | tidak ada — sama seperti X |
+
+Setiap langkah langsung diverifikasi (ambil 1 post / 1 media). Pakai **akun sekunder** untuk
+IG/X/FB; scraping bisa membuat akun dibatasi.
+
+## Setup manual di Windows (kalau tidak mau pakai setup.ps1)
 
 ```powershell
 git clone <url-repo-ini> meme-tools
@@ -65,25 +105,23 @@ salin perintah gallery-dl di dalamnya ke PowerShell.
 3. Isi *name* bebas, *redirect uri*: `http://localhost:8080`.
 4. Setelah dibuat: string pendek di bawah nama app = **client_id**, field *secret* = **client_secret**.
 
-Simpan di environment variable — **jangan pernah** ditulis di dalam script atau di-commit:
+Cara termudah: `python scripts/login.py --only reddit` — wizard membuka halamannya, kamu tempel
+nilainya, dan disimpan ke `.env` (sudah di `.gitignore`). Semua script otomatis membaca `.env`,
+jadi tidak perlu set environment variable manual. Kalau mau manual, isi `.env` mengikuti
+`.env.example`, **jangan pernah** tulis nilainya di dalam script atau di-commit.
+
+### Cookie IG / X / FB
+
+Tidak ada kredensial yang disimpan. Kamu login di browser (nama browser ada di `COOKIE_BROWSER`
+di `.env`), lalu tool membaca cookie dari browser itu setiap kali dijalankan:
 
 ```powershell
-$env:REDDIT_CLIENT_ID = "..."
-$env:REDDIT_CLIENT_SECRET = "..."
+yt-dlp     --cookies-from-browser firefox "<URL>"
+gallery-dl --cookies-from-browser firefox "<URL>"
+instaloader --load-cookies firefox --login <username>   # sekali, lalu sesi tersimpan di luar repo
 ```
 
-Atau taruh di file `.env` (sudah ada di `.gitignore`):
-
-```
-REDDIT_CLIENT_ID=...
-REDDIT_CLIENT_SECRET=...
-```
-
-lalu load sebelum menjalankan, misalnya di PowerShell:
-
-```powershell
-Get-Content .env | ForEach-Object { $k,$v = $_ -split '=',2; Set-Item "env:$k" $v }
-```
+Chrome/Edge di Windows kadang gagal dibaca (enkripsi cookie); kalau begitu pakai Firefox.
 
 ## Cara pakai tiap script
 
