@@ -41,7 +41,9 @@ def read_sources(path, extra):
         parts = line.split()
         if len(parts) != 2 or parts[0].lower() not in PLATFORMS:
             sys.exit(f"baris sources tidak dikenal: {line!r} (format: <platform> <akun>)")
-        out.append((parts[0].lower(), parts[1].lstrip("@")))
+        item = (parts[0].lower(), parts[1].lstrip("@"))
+        if item not in out:
+            out.append(item)
     if not out:
         sys.exit(f"Tidak ada sumber. Isi {SOURCES_FILE.name} atau pakai -s \"tiktok @akun\".")
     return out
@@ -104,17 +106,59 @@ def to_record(platform, account, post, files):
     return rec
 
 
-def fetch_tiktok(account, limit, browser):
-    """Daftar video sebuah akun TikTok lewat yt-dlp (tanpa mengunduh)."""
+TIKTOK_IDS = DATA_DIR / "tiktok_ids.json"   # cache: nama akun -> secUid (ID internal TikTok)
+
+
+def _ydl(browser, **extra):
     import yt_dlp
 
-    opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
-            "playlist_items": f"1-{limit}", "cookiesfrombrowser": (browser,) if browser else None}
+    opts = {"quiet": True, "no_warnings": True, "cookiesfrombrowser": (browser,) if browser else None}
+    opts.update(extra)
+    return yt_dlp.YoutubeDL({k: v for k, v in opts.items() if v is not None})
+
+
+def tiktok_target(account, browser):
+    """Tentukan URL daftar video untuk yt-dlp.
+
+    TikTok sering tidak memberi secUid lewat halaman profil ("Unable to extract secondary
+    user ID"). Jalan keluar resmi yt-dlp: ambil channel_id (= secUid) dari SATU video akun
+    itu, lalu pakai "tiktokuser:<secUid>". Karena itu sources.txt boleh berisi URL video:
+        tiktok https://www.tiktok.com/@akun/video/123
+    secUid yang ditemukan disimpan di data/tiktok_ids.json supaya berikutnya cukup nama akun.
+    """
+    ids = json.loads(TIKTOK_IDS.read_text(encoding="utf-8")) if TIKTOK_IDS.exists() else {}
+    if "/video/" in account or "/photo/" in account:            # URL satu video
+        url = account if account.startswith("http") else "https://" + account
+        name = url.split("/@", 1)[1].split("/", 1)[0] if "/@" in url else url
+        with _ydl(browser) as y:
+            info = y.extract_info(url, download=False)
+        sec = info.get("channel_id")
+        name = info.get("uploader") or info.get("channel") or name
+        if not sec:
+            raise RuntimeError("video ditemukan tapi tidak ada channel_id di metadatanya")
+        ids[name] = sec
+        DATA_DIR.mkdir(exist_ok=True)
+        TIKTOK_IDS.write_text(json.dumps(ids, indent=2), encoding="utf-8")
+        print(f"  secUid @{name} disimpan ke {TIKTOK_IDS.relative_to(ROOT)}")
+        return name, f"tiktokuser:{sec}"
+    if account in ids:
+        return account, f"tiktokuser:{ids[account]}"
+    return account, f"https://www.tiktok.com/@{account}"
+
+
+def fetch_tiktok(account, limit, browser):
+    """Daftar video sebuah akun TikTok lewat yt-dlp (tanpa mengunduh)."""
     try:
-        with yt_dlp.YoutubeDL({k: v for k, v in opts.items() if v is not None}) as y:
-            info = y.extract_info(f"https://www.tiktok.com/@{account}", download=False)
+        account, target = tiktok_target(account, browser)
+        with _ydl(browser, extract_flat=True, playlist_items=f"1-{limit}") as y:
+            info = y.extract_info(target, download=False)
     except Exception as e:  # noqa: BLE001
-        print(f"  gagal ({type(e).__name__}: {str(e).splitlines()[0][:160]})", file=sys.stderr)
+        msg = str(e).splitlines()[0]
+        print(f"  gagal ({type(e).__name__}: {msg[:160]})", file=sys.stderr)
+        if "secondary user ID" in msg:
+            print("  -> Buka satu video akun ini di browser, salin URL-nya, dan tulis di sources.txt:\n"
+                  f"     tiktok https://www.tiktok.com/@{account}/video/<id>\n"
+                  "     Script akan mengambil ID akun dari video itu dan menyimpannya.", file=sys.stderr)
         return [], None
     recs = []
     for e in info.get("entries") or []:
