@@ -3,7 +3,8 @@
 
     python scripts/social_top.py                          # instagram + x, kata kunci acak, 10 post per platform
     python scripts/social_top.py -p x -q "meme kucing" -n 15
-    python scripts/social_top.py -p instagram,x --download # + unduh maks. 5 file media (tes)
+    python scripts/social_top.py --download --max-download 20   # + unduh file medianya
+    python scripts/social_top.py -t latest --lang id -q memelucu # X terbaru berbahasa Indonesia
     python scripts/social_top.py -p facebook --fb-page <nama_page>
 
 Login: pakai cookie browser yang dipilih di .env (COOKIE_BROWSER, isi lewat scripts/login.py).
@@ -41,8 +42,14 @@ def build_url(platform, args):
         return f"https://www.instagram.com/explore/tags/{tag}/", f"#{tag}"
     if platform == "x":
         q = pick(QUERIES_X, args.query)
-        mode = "top" if args.time == "top" else "live"
-        return f"https://x.com/search?q={quote(q)}&f={mode}", q
+        parts = [q, "filter:media", "-filter:retweets"]
+        if "meme" in q.lower():
+            parts.append("-même")          # "meme" cocok dengan kata Prancis "même"
+        if args.min_likes:
+            parts.append(f"min_faves:{args.min_likes}")
+        if args.lang:
+            parts.append(f"lang:{args.lang}")
+        return f"https://x.com/search?q={quote(' '.join(parts))}", q
     if platform == "facebook":
         if not args.fb_page:
             sys.exit("Facebook tidak punya pencarian; beri nama page: --fb-page <nama_page> "
@@ -92,13 +99,14 @@ def to_record(platform, post, files, label):
     rec.update(
         platform=platform, query=label,
         url_media=[u for u, _ in files],
+        _headers=[kw.get("_http_headers") or {} for _, kw in files],
         jenis_media=("galeri" if len(files) > 1 else kinds[0]) if files else "teks",
         tanggal=date.isoformat() if hasattr(date, "isoformat") else str(date or ""),
     )
     return rec
 
 
-def fetch(platform, url, label, limit, browser):
+def fetch(platform, url, label, limit, browser, mode="top"):
     """Jalankan extractor gallery-dl, kumpulkan post + URL media, tanpa mengunduh."""
     from gallery_dl.extractor.message import Message
 
@@ -115,6 +123,7 @@ def fetch(platform, url, label, limit, browser):
             (("extractor", "instagram"), "videos", True),
             (("extractor", "twitter"), "videos", True),
             (("extractor", "twitter"), "retweets", False),
+            (("extractor", "twitter"), "search-results", "top" if mode == "top" else "live"),
         ])
         for msg in ex:
             if msg[0] == Message.Directory:
@@ -124,7 +133,10 @@ def fetch(platform, url, label, limit, browser):
                     break
                 cur_post, cur_files = msg[-1], []
             elif msg[0] == Message.Url:
-                cur_files.append((msg[1], msg[2]))
+                url, kw = msg[1], msg[2]
+                if url.startswith("ytdl:") and kw.get("_fallback"):
+                    url = kw["_fallback"][0]   # URL mp4 langsung (gallery-dl pakai ytdl hanya untuk DASH)
+                cur_files.append((url, kw))
         flush()
     except Exception as e:  # noqa: BLE001 — tampilkan apa adanya, jangan diakali
         sys.exit(f"{platform}: gagal ({type(e).__name__}: {e}). Kalau soal login/cookie, jalankan "
@@ -143,8 +155,12 @@ def download(records, session, budget):
             ext = Path(urlparse(url).path).suffix or (".mp4" if rec["jenis_media"] == "video" else ".jpg")
             dest = DOWNLOAD_DIR / rec["platform"] / f"{rec['id']}_{i}{ext}"
             dest.parent.mkdir(parents=True, exist_ok=True)
+            if url.startswith("ytdl:"):
+                print(f"  lewati (butuh yt-dlp): {rec['url_post']}")
+                continue
+            headers = (rec.get("_headers") or [{}] * len(rec["url_media"]))[i]
             try:
-                r = session.get(url, timeout=60)
+                r = session.get(url, headers=headers, timeout=60)
                 r.raise_for_status()
                 dest.write_bytes(r.content)
                 print(f"  unduh -> {dest.relative_to(ROOT)}")
@@ -161,8 +177,16 @@ def main():
     ap.add_argument("-n", "--limit", type=int, default=10, help="post per platform (default 10)")
     ap.add_argument("-t", "--time", default="top", choices=["top", "latest"], help="X: top atau latest")
     ap.add_argument("--fb-page", help="nama page Facebook (wajib untuk facebook)")
-    ap.add_argument("--download", action="store_true", help=f"unduh maks. {MAX_DOWNLOAD} file media total")
+    ap.add_argument("--min-likes", type=int, default=None,
+                    help="minimal like (default: 100 untuk top, 0 untuk latest)")
+    ap.add_argument("--lang", help="X: batasi bahasa, mis. id atau en")
+    ap.add_argument("--download", action="store_true", help="unduh file media ke downloads/<platform>/")
+    ap.add_argument("--max-download", type=int, default=MAX_DOWNLOAD,
+                    help=f"batas jumlah file yang diunduh (default {MAX_DOWNLOAD})")
     args = ap.parse_args()
+
+    if args.min_likes is None:
+        args.min_likes = 100 if args.time == "top" else 0
 
     load_env()
     import os
@@ -172,23 +196,29 @@ def main():
     for platform in [p.strip().lower() for p in args.platforms.split(",") if p.strip()]:
         url, label = build_url(platform, args)
         print(f"[{platform}] {label}  ({url})")
-        records, ex = fetch(platform, url, label, args.limit, browser)
+        # IG hashtag hanya punya tab "recent": ambil lebih banyak lalu pilih yang paling banyak like
+        pool = min(args.limit * 4, 100) if platform == "instagram" else args.limit
+        records, ex = fetch(platform, url, label, pool, browser, args.time)
         sessions[platform] = ex.session
-        print(f"  {len(records)} post")
+        records = [r for r in records if (r["skor"] or 0) >= args.min_likes or r["skor"] is None]
+        records.sort(key=lambda r: r["skor"] or 0, reverse=True)
+        records = records[:args.limit]
+        print(f"  {len(records)} post (dari {pool} yang diperiksa, min {args.min_likes} like)")
         all_records.extend(records)
 
     DATA_DIR.mkdir(exist_ok=True)
     out = DATA_DIR / f"social_{dt.datetime.now().strftime('%Y-%m-%d_%H%M')}.json"
-    out.write_text(json.dumps(all_records, ensure_ascii=False, indent=2), encoding="utf-8")
+    public = [{k: v for k, v in r.items() if not k.startswith("_")} for r in all_records]
+    out.write_text(json.dumps(public, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"{len(all_records)} post -> {out.relative_to(ROOT)}")
 
     if args.download and all_records:
         # pakai session extractor (sudah bawa cookie + header) supaya CDN tidak menolak
         n = 0
         for platform, sess in sessions.items():
-            if n >= MAX_DOWNLOAD:
+            if n >= args.max_download:
                 break
-            n += download([r for r in all_records if r["platform"] == platform], sess, MAX_DOWNLOAD - n)
+            n += download([r for r in all_records if r["platform"] == platform], sess, args.max_download - n)
         print(f"{n} file media diunduh ke downloads/")
 
 

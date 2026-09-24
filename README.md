@@ -170,10 +170,15 @@ Butuh login lewat `scripts/login.py` dulu (cookie dibaca dari `COOKIE_BROWSER`).
 ```powershell
 python scripts/social_top.py                              # instagram + x, kata kunci acak, 10 post per platform
 python scripts/social_top.py -q "meme kucing" -n 15       # kata kunci sendiri
-python scripts/social_top.py -p x -t latest               # X: terbaru, bukan top
+python scripts/social_top.py -p x -t latest --lang id     # X: terbaru, bahasa Indonesia
+python scripts/social_top.py --min-likes 500              # hanya post dengan >= 500 like
 python scripts/social_top.py -p facebook --fb-page 9gag   # FB tidak punya pencarian: harus per page
-python scripts/social_top.py --download                   # + unduh maks. 5 file media (tes)
+python scripts/social_top.py --download --max-download 20 # + unduh file medianya ke downloads/<platform>/
 ```
+
+Default `-t top` menyaring `min_faves:100` di X dan hanya post bermedia (`filter:media`);
+`-t latest` tanpa batas like. Instagram hashtag hanya punya tab *recent*, jadi script
+mengambil 4× lebih banyak lalu memilih yang paling banyak like.
 
 Hasil: `data/social_<tanggal>_<jam>.json`, format sama dengan `reddit_top.py` plus `platform`,
 `query`, dan untuk X: `retweet`, `views`. Kata kunci acak diambil dari daftar `QUERIES_X` /
