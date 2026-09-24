@@ -1,0 +1,10 @@
+# Toolkit riset meme — pasang dengan: pip install -r requirements.txt
+yt-dlp==2026.8.19
+gallery-dl==1.32.13
+instaloader==4.15.3
+bdfr==2.6.2
+# praw dipin ke 7.7.1: bdfr 2.6.2 mengambil praw.reddit.BaseTokenManager,
+# yang dipindahkan ke blok TYPE_CHECKING sejak praw 7.8 (dan hilang di praw 8).
+praw==7.7.1
+scrapy==2.19.0
+requests>=2.31
