@@ -96,9 +96,18 @@ Setiap kali membuka terminal baru, aktifkan venv dulu: `.\.venv\Scripts\Activate
 `scripts/gallery_dl_top.sh` adalah script bash; di Windows jalankan lewat **Git Bash**, atau
 salin perintah gallery-dl di dalamnya ke PowerShell.
 
-## Kredensial Reddit API
+## Kredensial Reddit API (opsional)
 
-`reddit_top.py` dan `bdfr` memakai Reddit API resmi. Cara mendapatkan kredensial:
+> **Sejak November 2025 Reddit memberlakukan *Responsible Builder Policy*:** tombol
+> *create app* di `prefs/apps` biasanya tidak berfungsi untuk akun baru (CAPTCHA lolos,
+> diklik, tidak terjadi apa-apa, hanya muncul kalimat kebijakan). Akses API harus diminta
+> lewat link *register to use the API* dan sering ditolak.
+>
+> Karena itu **`reddit_top.py` tidak butuh API key**: tanpa kredensial ia memakai endpoint
+> JSON publik Reddit (sama seperti gallery-dl). Kredensial hanya perlu untuk `bdfr` dan
+> untuk rate limit yang lebih longgar. Kalau kamu sudah punya API key lama, tetap bisa dipakai.
+
+Kalau ingin mencoba membuat kredensial:
 
 1. Buka https://www.reddit.com/prefs/apps (login dulu).
 2. Klik **create another app...**, pilih tipe **script**.
@@ -137,7 +146,8 @@ Hasil: `data/<subreddit>_<YYYY-MM-DD>.json`, satu objek per post:
 `judul`, `skor`, `jumlah_komentar`, `url_post`, `url_media`, `jenis_media`
 (`gambar` / `video` / `galeri` / `teks` / `link`), `tanggal`, `nsfw`, `author`.
 
-Tanpa kredensial, script berhenti dan mencetak panduan membuatnya.
+Tanpa kredensial, script otomatis memakai JSON publik Reddit (tidak perlu API key). Baris pertama
+output menunjukkan mode yang dipakai.
 
 ### `scripts/gallery_dl_top.sh` — 3 gambar teratas harian tanpa API key
 

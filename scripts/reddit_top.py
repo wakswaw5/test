@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Ambil metadata post teratas dari sebuah subreddit lewat PRAW (Reddit API resmi).
 
-Kredensial dibaca dari environment variable REDDIT_CLIENT_ID dan REDDIT_CLIENT_SECRET.
+Tanpa kredensial: pakai endpoint JSON publik Reddit (cukup untuk top post subreddit publik).
+Dengan REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET di .env: pakai Reddit API resmi lewat PRAW.
 Hasil disimpan ke data/<subreddit>_<tanggal>.json. Media hanya diunduh dengan --download
 (maksimal 5 file, untuk tes).
 """
@@ -12,6 +13,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlparse
 
 import praw
@@ -26,7 +28,7 @@ USER_AGENT = "meme-research-toolkit/0.1 (riset tren; script PRAW)"
 MAX_DOWNLOAD = 5
 
 CREDENTIAL_HELP = """\
-Kredensial Reddit API belum diset.
+Kredensial Reddit API belum diset (opsional — tanpa ini script pakai JSON publik).
 
 1. Buka https://www.reddit.com/prefs/apps (login dulu).
 2. Klik "create another app...", pilih tipe "script".
@@ -60,6 +62,33 @@ def classify(post):
     if post.is_self:
         return "teks", None
     return "link", post.url
+
+
+def fetch_public(subreddit, time_filter, limit):
+    """Ambil top post lewat endpoint JSON publik Reddit (tanpa API key).
+
+    Mengembalikan objek dengan atribut yang sama seperti submission PRAW,
+    sehingga classify()/to_record() bisa dipakai untuk keduanya.
+    """
+    url = f"https://www.reddit.com/r/{subreddit}/top.json"
+    r = requests.get(url, params={"t": time_filter, "limit": min(limit, 100), "raw_json": 1},
+                     headers={"User-Agent": USER_AGENT}, timeout=30)
+    if r.status_code in (403, 429):
+        sys.exit(f"Reddit menolak request ({r.status_code}). Biasanya rate limit atau IP diblokir; "
+                 "coba lagi beberapa menit lagi, atau dari jaringan lain.")
+    r.raise_for_status()
+    posts = []
+    for child in r.json()["data"]["children"]:
+        d = child["data"]
+        posts.append(SimpleNamespace(
+            id=d["id"], title=d["title"], score=d["score"], num_comments=d["num_comments"],
+            permalink=d["permalink"], url=d["url"], created_utc=d["created_utc"],
+            over_18=d.get("over_18", False), author=d.get("author"),
+            is_self=d.get("is_self", False), is_video=d.get("is_video", False),
+            media=d.get("media"), is_gallery=d.get("is_gallery", False),
+            gallery_data=d.get("gallery_data"), media_metadata=d.get("media_metadata"),
+        ))
+    return posts[:limit]
 
 
 def to_record(post):
@@ -112,15 +141,18 @@ def main():
     load_env()  # baca .env di root repo kalau ada
     client_id = os.environ.get("REDDIT_CLIENT_ID")
     client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        print(CREDENTIAL_HELP, file=sys.stderr)
-        sys.exit(2)
-
-    reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=USER_AGENT)
-    reddit.read_only = True
-
-    posts = reddit.subreddit(args.subreddit).top(time_filter=args.time, limit=args.limit)
+    if client_id and client_secret:
+        reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=USER_AGENT)
+        reddit.read_only = True
+        posts = reddit.subreddit(args.subreddit).top(time_filter=args.time, limit=args.limit)
+        mode = "Reddit API"
+    else:
+        # Sejak Nov 2025 Reddit tidak lagi memberi API key baru secara mandiri
+        # (Responsible Builder Policy), jadi default-nya pakai JSON publik.
+        posts = fetch_public(args.subreddit, args.time, args.limit)
+        mode = "JSON publik, tanpa API key"
     records = [to_record(p) for p in posts]
+    print(f"mode: {mode}")
 
     DATA_DIR.mkdir(exist_ok=True)
     out = DATA_DIR / f"{args.subreddit}_{dt.date.today().isoformat()}.json"

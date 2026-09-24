@@ -95,7 +95,16 @@ def check_browser():
 def check_reddit(verbose=True):
     cid, sec = os.environ.get("REDDIT_CLIENT_ID"), os.environ.get("REDDIT_CLIENT_SECRET")
     if not cid or not sec:
-        fail("REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET belum ada di .env")
+        # Tanpa API key, reddit_top.py memakai JSON publik — uji jalur itu.
+        try:
+            from reddit_top import fetch_public
+            post = fetch_public("memes", "day", 1)[0]
+            ok(f"Reddit tanpa API key (JSON publik) jalan (contoh post: {post.title[:50]!r})")
+            return True
+        except SystemExit as e:
+            fail(f"Reddit JSON publik: {e}")
+        except Exception as e:  # noqa: BLE001
+            fail(f"Reddit JSON publik gagal: {type(e).__name__}: {e}")
         return False
     try:
         import praw
@@ -110,19 +119,25 @@ def check_reddit(verbose=True):
 
 
 def setup_reddit():
-    hr("1. Reddit API")
+    hr("1. Reddit API (OPSIONAL)")
     if os.environ.get("REDDIT_CLIENT_ID") and ask("Sudah ada kredensial di .env. Ganti? (y/N)", "n").lower() != "y":
+        return check_reddit()
+    print("  Tanpa API key, reddit_top.py tetap jalan lewat JSON publik Reddit.")
+    print("  CATATAN: sejak Nov 2025 (Responsible Builder Policy) tombol 'create app' di")
+    print("  prefs/apps biasanya TIDAK berfungsi untuk akun baru; akses harus diminta lewat")
+    print("  link 'register to use the API' dan sering ditolak. Kalau begitu, lewati saja.")
+    if ask("Coba buat API key? (y/N)", "n").lower() != "y":
         return check_reddit()
     print("  Membuka https://www.reddit.com/prefs/apps ...")
     print("  1. Login Reddit, klik 'create another app...', pilih tipe: script")
     print("  2. name: bebas | redirect uri: http://localhost:8080 | klik create app")
     print("  3. client_id = string pendek di bawah nama app; secret = field 'secret'")
     webbrowser.open("https://www.reddit.com/prefs/apps")
-    cid = ask("client_id")
-    sec = getpass("  client_secret (tidak ditampilkan): ").strip()
+    cid = ask("client_id (kosong = lewati)")
+    sec = getpass("  client_secret (tidak ditampilkan): ").strip() if cid else ""
     if not cid or not sec:
-        fail("kosong, Reddit dilewati")
-        return False
+        print("  dilewati, pakai mode JSON publik")
+        return check_reddit()
     set_env("REDDIT_CLIENT_ID", cid)
     set_env("REDDIT_CLIENT_SECRET", sec)
     ok("disimpan ke .env")
