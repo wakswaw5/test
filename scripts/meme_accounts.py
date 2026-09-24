@@ -104,7 +104,36 @@ def to_record(platform, account, post, files):
     return rec
 
 
+def fetch_tiktok(account, limit, browser):
+    """Daftar video sebuah akun TikTok lewat yt-dlp (tanpa mengunduh)."""
+    import yt_dlp
+
+    opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
+            "playlist_items": f"1-{limit}", "cookiesfrombrowser": (browser,) if browser else None}
+    try:
+        with yt_dlp.YoutubeDL({k: v for k, v in opts.items() if v is not None}) as y:
+            info = y.extract_info(f"https://www.tiktok.com/@{account}", download=False)
+    except Exception as e:  # noqa: BLE001
+        print(f"  gagal ({type(e).__name__}: {str(e).splitlines()[0][:160]})", file=sys.stderr)
+        return [], None
+    recs = []
+    for e in info.get("entries") or []:
+        ts = e.get("timestamp")
+        recs.append(dict(
+            id=str(e.get("id")), judul=(e.get("title") or e.get("description") or "")[:500],
+            skor=int(e.get("like_count") or 0), jumlah_komentar=int(e.get("comment_count") or 0),
+            views=int(e.get("view_count") or 0),
+            url_post=e.get("url") or e.get("webpage_url") or f"https://www.tiktok.com/@{account}/video/{e.get('id')}",
+            jenis_media="video", platform="tiktok", akun=account, url_media=[], _headers=[],
+            tanggal=dt.datetime.fromtimestamp(ts, dt.timezone.utc).isoformat() if ts else "",
+        ))
+    return recs[:limit], None
+
+
 def fetch(platform, account, limit, browser):
+    if platform == "tiktok":
+        return fetch_tiktok(account, limit, browser)
+
     from gallery_dl.extractor.message import Message
 
     from _gdl import make_extractor
