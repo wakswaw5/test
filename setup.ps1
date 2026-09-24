@@ -32,29 +32,42 @@ function Ask-Install($name, $wingetId) {
 }
 
 # ---------- Python ----------
+# $PyExe = program, $PyArgs = argumen awal (mis. "py" + "-3.12"). Path dengan spasi aman
+# karena dipanggil langsung lewat PowerShell (&), bukan lewat cmd.
+function Invoke-Py { & $script:PyExe @script:PyArgs @args }
+
 Step "Mencari Python 3.10+"
-if (-not $Python) {
-    foreach ($cand in @("py -3.12", "py -3", "python")) {
-        try {
-            $v = & cmd /c "$cand -c `"import sys;print(sys.version_info[:2]>=(3,10))`" 2>nul"
-            if ($v -eq "True") { $Python = $cand; break }
-        } catch {}
+$candidates = if ($Python) { @($Python) } else { @("py -3.12", "py -3", "python") }
+$found = ""
+foreach ($cand in $candidates) {
+    if (Test-Path -LiteralPath $cand -PathType Leaf) {
+        # path lengkap ke python.exe (boleh mengandung spasi)
+        $script:PyExe = $cand; $script:PyArgs = @()
+    } else {
+        # perintah + argumen, mis. "py -3.12"
+        $parts = $cand -split " "
+        $script:PyExe = $parts[0]; $script:PyArgs = @($parts | Select-Object -Skip 1)
     }
+    if (-not (Get-Command $script:PyExe -ErrorAction SilentlyContinue)) { continue }
+    $v = Invoke-Py -c "import sys;print(sys.version_info[:2]>=(3,10))" 2>$null
+    if ($v -eq "True") { $found = $cand; break }
 }
+$Python = $found
 if (-not $Python) {
     Warn "Python 3.10+ tidak ditemukan. Pasang dari https://www.python.org/downloads/ (centang 'Add to PATH')"
     Warn "atau jalankan: .\setup.ps1 -Python `"C:\Users\<nama>\AppData\Local\Programs\Python\Python312\python.exe`""
     exit 1
 }
-Ok "pakai: $Python"
+Ok "pakai: $Python ($(Invoke-Py --version))"
 
 # ---------- venv ----------
 Step "Virtual environment .venv"
-if (-not (Test-Path "$Root\.venv\Scripts\python.exe")) {
-    & cmd /c "$Python -m venv `"$Root\.venv`""
+$VPy = "$Root\.venv\Scripts\python.exe"
+if (-not (Test-Path $VPy)) {
+    Invoke-Py -m venv "$Root\.venv"
+    if (-not (Test-Path $VPy)) { Warn "venv gagal dibuat (lihat pesan di atas)"; exit 1 }
     Ok "dibuat"
 } else { Ok "sudah ada" }
-$VPy = "$Root\.venv\Scripts\python.exe"
 
 Step "Memasang paket Python (requirements.txt)"
 & $VPy -m pip install --upgrade pip --quiet
