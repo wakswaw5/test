@@ -2,7 +2,8 @@
 
 - `firecrawl*`: copied from https://github.com/firecrawl/skills (`skills/core`, commit c469b46). ISC License, shown below.
 - `browser-use` and `browser-use-library` (upstream name `open-source`): copied from https://github.com/browser-use/browser-use (`skills/`, commit d8110c5). MIT License, shown below.
-- `web-scraping-toolkit`: written for this repo.
+- `scrapling-official`: copied from https://github.com/D4Vinci/Scrapling (`agent-skill/Scrapling-Skill`, commit 0b85f7e). BSD 3-Clause License, included in `scrapling-official/LICENSE.txt`.
+- `web-scraping-toolkit`, `markitdown`, `scrcpy`: written for this repo.
 
 ## Firecrawl — ISC License
 ```
