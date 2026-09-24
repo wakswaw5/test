@@ -189,24 +189,43 @@ def check_instagram():
     return False
 
 
+def import_instagram_session():
+    """Ambil cookie instagram.com dari browser lewat pembaca cookie yt-dlp (lebih andal
+    daripada browser_cookie3 yang dipakai instaloader), lalu simpan sesi instaloader.
+    Sesi disimpan di folder profil user (%LOCALAPPDATA%\\Instaloader), bukan di repo.
+    Mengembalikan username, atau melempar exception dengan pesan yang jelas."""
+    import instaloader
+    from yt_dlp.cookies import extract_cookies_from_browser
+
+    jar = extract_cookies_from_browser(browser())
+    cookies = {c.name: c.value for c in jar if c.domain.endswith("instagram.com")}
+    if "sessionid" not in cookies:
+        raise RuntimeError(f"tidak ada cookie login instagram.com di {browser()} — sudah login di sana?")
+    L = instaloader.Instaloader(quiet=True)
+    L.context.update_cookies(cookies)
+    user = L.test_login()
+    if not user:
+        raise RuntimeError("cookie ada tapi Instagram tidak mengenalinya sebagai sesi login")
+    L.context.username = user
+    L.save_session_to_file()
+    return user
+
+
 def setup_instagram():
     hr("2. Instagram")
     print("  Pakai AKUN SEKUNDER khusus riset — scraping bisa bikin akun dibatasi.")
     print(f"  Buka https://www.instagram.com di {browser()} dan login.")
     open_url("https://www.instagram.com/")
     input("  Tekan Enter setelah login di browser selesai... ")
-    # instaloader mengimpor cookie dari browser, mendeteksi username-nya sendiri, dan
-    # menyimpan sesi di folder profil user (%LOCALAPPDATA%\Instaloader), bukan di repo.
-    code, out = run([PY, "-m", "instaloader", "--load-cookies", browser()])
-    m = re.search(r"^(\S+) has been successfully logged in", out, re.M)
-    if code != 0 or not m:
-        fail(f"import sesi gagal: {last_line(out)}")
+    try:
+        user = import_instagram_session()
+    except Exception as e:  # noqa: BLE001
+        fail(f"import sesi gagal: {type(e).__name__}: {e}")
         if browser() != "firefox":
             print("  Chrome/Edge: cookie terenkripsi, tidak bisa dibaca. Pakai Firefox.")
         return False
-    user = m.group(1)
     set_env("INSTAGRAM_USERNAME", user)
-    ok(f"login sebagai @{user}, username disimpan ke .env")
+    ok(f"login sebagai @{user}, sesi disimpan, username disimpan ke .env")
     return check_instagram()
 
 
