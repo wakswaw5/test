@@ -95,16 +95,16 @@ def check_browser():
 def check_reddit(verbose=True):
     cid, sec = os.environ.get("REDDIT_CLIENT_ID"), os.environ.get("REDDIT_CLIENT_SECRET")
     if not cid or not sec:
-        # Tanpa API key, reddit_top.py memakai JSON publik — uji jalur itu.
+        # Tanpa API key, reddit_top.py memakai gallery-dl — uji jalur itu.
         try:
             from reddit_top import fetch_public
             post = fetch_public("memes", "day", 1)[0]
-            ok(f"Reddit tanpa API key (JSON publik) jalan (contoh post: {post.title[:50]!r})")
+            ok(f"Reddit tanpa API key (via gallery-dl) jalan (contoh post: {post.title[:50]!r})")
             return True
         except SystemExit as e:
-            fail(f"Reddit JSON publik: {e}")
+            fail(f"Reddit tanpa API key: {e}")
         except Exception as e:  # noqa: BLE001
-            fail(f"Reddit JSON publik gagal: {type(e).__name__}: {e}")
+            fail(f"Reddit tanpa API key gagal: {type(e).__name__}: {e}")
         return False
     try:
         import praw
@@ -122,7 +122,7 @@ def setup_reddit():
     hr("1. Reddit API (OPSIONAL)")
     if os.environ.get("REDDIT_CLIENT_ID") and ask("Sudah ada kredensial di .env. Ganti? (y/N)", "n").lower() != "y":
         return check_reddit()
-    print("  Tanpa API key, reddit_top.py tetap jalan lewat JSON publik Reddit.")
+    print("  Tanpa API key, reddit_top.py tetap jalan lewat gallery-dl (tanpa login).")
     print("  CATATAN: sejak Nov 2025 (Responsible Builder Policy) tombol 'create app' di")
     print("  prefs/apps biasanya TIDAK berfungsi untuk akun baru; akses harus diminta lewat")
     print("  link 'register to use the API' dan sering ditolak. Kalau begitu, lewati saja.")
@@ -136,7 +136,7 @@ def setup_reddit():
     cid = ask("client_id (kosong = lewati)")
     sec = getpass("  client_secret (tidak ditampilkan): ").strip() if cid else ""
     if not cid or not sec:
-        print("  dilewati, pakai mode JSON publik")
+        print("  dilewati, pakai mode tanpa API key")
         return check_reddit()
     set_env("REDDIT_CLIENT_ID", cid)
     set_env("REDDIT_CLIENT_SECRET", sec)

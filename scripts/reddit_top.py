@@ -64,21 +64,31 @@ def classify(post):
 
 
 def fetch_public(subreddit, time_filter, limit):
-    """Ambil top post lewat endpoint JSON publik Reddit (tanpa API key).
+    """Ambil top post tanpa API key milik user.
 
-    Mengembalikan objek dengan atribut yang sama seperti submission PRAW,
-    sehingga classify()/to_record() bisa dipakai untuk keduanya.
+    Endpoint JSON "polos" Reddit sekarang sering menjawab 403, jadi ini memakai
+    extractor Reddit milik gallery-dl (sudah terpasang), yang mengambil token
+    installed-app resmi milik gallery-dl. Hanya metadata yang diambil, tidak ada
+    yang diunduh. Mengembalikan objek dengan atribut seperti submission PRAW.
     """
-    url = f"https://www.reddit.com/r/{subreddit}/top.json"
-    r = requests.get(url, params={"t": time_filter, "limit": min(limit, 100), "raw_json": 1},
-                     headers={"User-Agent": USER_AGENT}, timeout=30)
-    if r.status_code in (403, 429):
-        sys.exit(f"Reddit menolak request ({r.status_code}). Biasanya rate limit atau IP diblokir; "
-                 "coba lagi beberapa menit lagi, atau dari jaringan lain.")
-    r.raise_for_status()
-    posts = []
-    for child in r.json()["data"]["children"]:
-        d = child["data"]
+    from gallery_dl import config, extractor
+    from gallery_dl.extractor.message import Message
+
+    config.set(("extractor", "reddit"), "comments", 0)          # jangan ambil komentar
+    config.set(("extractor", "reddit"), "limit", min(limit, 100))
+    ex = extractor.find(f"https://www.reddit.com/r/{subreddit}/top/?t={time_filter}")
+    ex.initialize()
+
+    posts, seen = [], set()
+    try:
+        messages = list(_iter_dirs(ex, Message, limit))
+    except Exception as e:  # noqa: BLE001 — pesan gallery-dl sering kurang jelas, bungkus
+        sys.exit(f"Gagal mengambil r/{subreddit} lewat gallery-dl ({type(e).__name__}: {e}). "
+                 "Biasanya Reddit membatasi IP atau sedang down; coba lagi beberapa menit lagi.")
+    for d in messages:
+        if d.get("id") in seen:
+            continue
+        seen.add(d["id"])
         posts.append(SimpleNamespace(
             id=d["id"], title=d["title"], score=d["score"], num_comments=d["num_comments"],
             permalink=d["permalink"], url=d["url"], created_utc=d["created_utc"],
@@ -87,7 +97,17 @@ def fetch_public(subreddit, time_filter, limit):
             media=d.get("media"), is_gallery=d.get("is_gallery", False),
             gallery_data=d.get("gallery_data"), media_metadata=d.get("media_metadata"),
         ))
-    return posts[:limit]
+    return posts
+
+
+def _iter_dirs(ex, Message, limit):
+    n = 0
+    for msg in ex:
+        if msg[0] == Message.Directory:
+            yield msg[-1]
+            n += 1
+            if n >= limit:
+                return
 
 
 def to_record(post):
@@ -151,7 +171,7 @@ def main():
         # Sejak Nov 2025 Reddit tidak lagi memberi API key baru secara mandiri
         # (Responsible Builder Policy), jadi default-nya pakai JSON publik.
         posts = fetch_public(args.subreddit, args.time, args.limit)
-        mode = "JSON publik, tanpa API key"
+        mode = "tanpa API key (via gallery-dl)"
     records = [to_record(p) for p in posts]
     print(f"mode: {mode}")
 

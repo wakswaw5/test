@@ -103,8 +103,8 @@ salin perintah gallery-dl di dalamnya ke PowerShell.
 > diklik, tidak terjadi apa-apa, hanya muncul kalimat kebijakan). Akses API harus diminta
 > lewat link *register to use the API* dan sering ditolak.
 >
-> Karena itu **`reddit_top.py` tidak butuh API key**: tanpa kredensial ia memakai endpoint
-> JSON publik Reddit (sama seperti gallery-dl). Kredensial hanya perlu untuk `bdfr` dan
+> Karena itu **`reddit_top.py` tidak butuh API key**: tanpa kredensial ia memakai extractor
+> Reddit milik gallery-dl (endpoint JSON "polos" Reddit sekarang menjawab 403). Kredensial hanya perlu untuk `bdfr` dan
 > untuk rate limit yang lebih longgar. Kalau kamu sudah punya API key lama, tetap bisa dipakai.
 
 Kalau ingin mencoba membuat kredensial:
@@ -146,7 +146,7 @@ Hasil: `data/<subreddit>_<YYYY-MM-DD>.json`, satu objek per post:
 `judul`, `skor`, `jumlah_komentar`, `url_post`, `url_media`, `jenis_media`
 (`gambar` / `video` / `galeri` / `teks` / `link`), `tanggal`, `nsfw`, `author`.
 
-Tanpa kredensial, script otomatis memakai JSON publik Reddit (tidak perlu API key). Baris pertama
+Tanpa kredensial, script otomatis memakai extractor Reddit milik gallery-dl (tidak perlu API key). Baris pertama
 output menunjukkan mode yang dipakai.
 
 ### `scripts/gallery_dl_top.sh` — 3 gambar teratas harian tanpa API key
