@@ -100,16 +100,10 @@ def to_record(platform, post, files, label):
 
 def fetch(platform, url, label, limit, browser):
     """Jalankan extractor gallery-dl, kumpulkan post + URL media, tanpa mengunduh."""
-    from gallery_dl import config, extractor
     from gallery_dl.extractor.message import Message
 
-    config.set(("extractor",), "cookies", (browser,))
-    config.set(("extractor", "instagram"), "videos", True)
-    config.set(("extractor", "twitter"), "videos", True)
-    config.set(("extractor", "twitter"), "retweets", False)
-    ex = extractor.find(url)
-    if ex is None:
-        sys.exit(f"gallery-dl tidak mengenali URL: {url}")
+    from _gdl import make_extractor
+
     posts, cur_post, cur_files = [], None, []
 
     def flush():
@@ -117,7 +111,11 @@ def fetch(platform, url, label, limit, browser):
             posts.append(to_record(platform, cur_post, cur_files, label))
 
     try:
-        ex.initialize()
+        ex = make_extractor(url, browser, options=[
+            (("extractor", "instagram"), "videos", True),
+            (("extractor", "twitter"), "videos", True),
+            (("extractor", "twitter"), "retweets", False),
+        ])
         for msg in ex:
             if msg[0] == Message.Directory:
                 flush()

@@ -71,16 +71,16 @@ def fetch_public(subreddit, time_filter, limit):
     installed-app resmi milik gallery-dl. Hanya metadata yang diambil, tidak ada
     yang diunduh. Mengembalikan objek dengan atribut seperti submission PRAW.
     """
-    from gallery_dl import config, extractor
     from gallery_dl.extractor.message import Message
 
-    config.set(("extractor", "reddit"), "comments", 0)          # jangan ambil komentar
-    config.set(("extractor", "reddit"), "limit", min(limit, 100))
-    ex = extractor.find(f"https://www.reddit.com/r/{subreddit}/top/?t={time_filter}")
-    ex.initialize()
+    from _gdl import make_extractor
 
     posts, seen = [], set()
     try:
+        ex = make_extractor(f"https://www.reddit.com/r/{subreddit}/top/?t={time_filter}", options=[
+            (("extractor", "reddit"), "comments", 0),          # jangan ambil komentar
+            (("extractor", "reddit"), "limit", min(limit, 100)),
+        ])
         messages = list(_iter_dirs(ex, Message, limit))
     except Exception as e:  # noqa: BLE001 — pesan gallery-dl sering kurang jelas, bungkus
         sys.exit(f"Gagal mengambil r/{subreddit} lewat gallery-dl ({type(e).__name__}: {e}). "
