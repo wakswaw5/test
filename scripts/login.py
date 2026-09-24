@@ -12,6 +12,7 @@ Yang disimpan ke .env hanya: client_id/secret Reddit, nama browser, username Ins
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import webbrowser
@@ -76,6 +77,11 @@ def setup_browser():
         b = "firefox"
     set_env("COOKIE_BROWSER", b)
     ok(f"COOKIE_BROWSER={b} disimpan ke .env")
+    if b != "firefox":
+        print(f"  !! Sejak 2024 {b.capitalize()} di Windows mengenkripsi cookie (app-bound encryption)")
+        print("     dan yt-dlp/gallery-dl/instaloader TIDAK bisa membacanya. Kalau X/FB/IG gagal,")
+        print("     pasang Firefox, login di sana, lalu ulangi wizard dan pilih firefox.")
+    return True
 
 
 def check_browser():
@@ -168,21 +174,21 @@ def check_instagram():
 def setup_instagram():
     hr("2. Instagram")
     print("  Pakai AKUN SEKUNDER khusus riset — scraping bisa bikin akun dibatasi.")
-    print(f"  1. Buka https://www.instagram.com di {browser()} dan login.")
+    print(f"  Buka https://www.instagram.com di {browser()} dan login.")
     webbrowser.open("https://www.instagram.com/")
-    user = ask("Username Instagram yang dipakai login", os.environ.get("INSTAGRAM_USERNAME", ""))
-    if not user:
-        fail("kosong, Instagram dilewati")
-        return False
-    set_env("INSTAGRAM_USERNAME", user)
     input("  Tekan Enter setelah login di browser selesai... ")
-    # instaloader mengimpor cookie dari browser dan menyimpan sesi di folder profil user
-    # (%LOCALAPPDATA%\Instaloader di Windows), bukan di repo.
-    code, out = run([PY, "-m", "instaloader", "--load-cookies", browser(), "--login", user])
-    if code != 0:
+    # instaloader mengimpor cookie dari browser, mendeteksi username-nya sendiri, dan
+    # menyimpan sesi di folder profil user (%LOCALAPPDATA%\Instaloader), bukan di repo.
+    code, out = run([PY, "-m", "instaloader", "--load-cookies", browser()])
+    m = re.search(r"^(\S+) has been successfully logged in", out, re.M)
+    if code != 0 or not m:
         fail(f"import sesi gagal: {last_line(out)}")
-        print("  Kalau pakai Chrome/Edge dan gagal, coba Firefox.")
+        if browser() != "firefox":
+            print("  Chrome/Edge: cookie terenkripsi, tidak bisa dibaca. Pakai Firefox.")
         return False
+    user = m.group(1)
+    set_env("INSTAGRAM_USERNAME", user)
+    ok(f"login sebagai @{user}, username disimpan ke .env")
     return check_instagram()
 
 
