@@ -61,7 +61,7 @@ python scripts/login.py --check           # cek mana yang masih valid
 | Langkah | Yang kamu lakukan | Yang disimpan |
 |---|---|---|
 | Browser | Pilih browser tempat login (Firefox paling stabil) | `COOKIE_BROWSER` di `.env` |
-| Reddit | Buat app tipe *script* di halaman yang dibuka, tempel client_id + secret | `REDDIT_CLIENT_ID/SECRET` di `.env` |
+| Reddit (opsional) | Jawab `n` untuk lewati — script jalan tanpa API key. Kalau punya key lama, tempel di sini | `REDDIT_CLIENT_ID/SECRET` di `.env` |
 | Instagram | Login di browser, ketik username | sesi di `%LOCALAPPDATA%\Instaloader` (di luar repo) |
 | X | Login di browser, tekan Enter | tidak ada — cookie dibaca dari browser saat dipakai |
 | Facebook | Login di browser, tekan Enter | tidak ada — sama seperti X |
