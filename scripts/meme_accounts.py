@@ -15,6 +15,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -146,19 +147,58 @@ def tiktok_target(account, browser):
     return account, f"https://www.tiktok.com/@{account}"
 
 
+VIDEO_URL_RE = re.compile(r"https?://(www\.)?tiktok\.com/@[\w.\-]+/(video|photo)/(\d{15,})")
+EXAMPLE_IDS = {"7412345678901234567", "1234567890"}   # angka contoh di dokumen, bukan video sungguhan
+
+
+def ask_tiktok_video_url(account, browser):
+    """Buka profil TikTok di browser dan minta user menempel URL satu video (interaktif)."""
+    if not sys.stdin.isatty():
+        return None
+    try:
+        from login import open_url
+        open_url(f"https://www.tiktok.com/@{account}")
+    except Exception:  # noqa: BLE001
+        pass
+    print(f"\n  TikTok tidak memberi ID akun @{account} lewat halaman profil. Saya butuh URL SATU video-nya.")
+    print(f"  1. Halaman https://www.tiktok.com/@{account} sedang dibuka di browser.")
+    print("  2. Klik salah satu video.")
+    print("  3. Salin URL dari address bar (bentuknya .../video/ + 19 angka), tempel di bawah ini.")
+    for _ in range(3):
+        url = input("  URL video (Enter = lewati): ").strip()
+        if not url:
+            return None
+        m = VIDEO_URL_RE.search(url)
+        if not m or m.group(3) in EXAMPLE_IDS:
+            print("  Itu bukan URL video sungguhan. Harus dari address bar browser, bukan contoh dari dokumen.")
+            continue
+        return m.group(0)
+    return None
+
+
 def fetch_tiktok(account, limit, browser):
     """Daftar video sebuah akun TikTok lewat yt-dlp (tanpa mengunduh)."""
     try:
-        account, target = tiktok_target(account, browser)
-        with _ydl(browser, extract_flat=True, playlist_items=f"1-{limit}") as y:
-            info = y.extract_info(target, download=False)
+        try:
+            account, target = tiktok_target(account, browser)
+            with _ydl(browser, extract_flat=True, playlist_items=f"1-{limit}") as y:
+                info = y.extract_info(target, download=False)
+        except Exception as e:  # noqa: BLE001
+            if "secondary user ID" not in str(e):
+                raise
+            url = ask_tiktok_video_url(account, browser)
+            if not url:
+                raise
+            account, target = tiktok_target(url, browser)
+            with _ydl(browser, extract_flat=True, playlist_items=f"1-{limit}") as y:
+                info = y.extract_info(target, download=False)
     except Exception as e:  # noqa: BLE001
         msg = str(e).splitlines()[0]
         print(f"  gagal ({type(e).__name__}: {msg[:160]})", file=sys.stderr)
-        if "secondary user ID" in msg:
-            print("  -> Buka satu video akun ini di browser, salin URL-nya, dan tulis di sources.txt:\n"
-                  f"     tiktok https://www.tiktok.com/@{account}/video/<id>\n"
-                  "     Script akan mengambil ID akun dari video itu dan menyimpannya.", file=sys.stderr)
+        if "Unexpected response from webpage" in msg:
+            print("  -> TikTok menolak permintaan yt-dlp dari jaringan ini (atau video tidak ada). "
+                  "Coba: pip install -U yt-dlp, lalu ulangi; kalau tetap, TikTok memblokir IP-mu.",
+                  file=sys.stderr)
         return [], None
     recs = []
     for e in info.get("entries") or []:
