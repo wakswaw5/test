@@ -1,0 +1,8 @@
+# Daftar akun/page meme untuk scripts/meme_accounts.py — satu per baris: <platform> <akun>
+# platform: tiktok | instagram | x | facebook   (baris diawali # diabaikan)
+#
+# Isi dengan akun yang kamu tahu bagus (tanpa watermark, sesuai selera). Contoh:
+tiktok    @rankedmemes
+instagram rankedmemes
+# x         memes
+# facebook  9gag

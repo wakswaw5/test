@@ -10,6 +10,8 @@ lihat [Catatan etika & legal](#catatan-etika--legal) di bawah.
 |---|---|
 | `scripts/reddit_top.py` | Ambil N post teratas subreddit lewat Reddit API (PRAW), simpan metadata ke `data/` |
 | `scripts/gallery_dl_top.sh` | Contoh gallery-dl: unduh 3 gambar teratas harian r/memes (tanpa API key) |
+| `scripts/meme_accounts.py` | **Cara utama**: post terpopuler dari akun/page meme di `sources.txt` (TikTok tanpa login & tanpa watermark, IG, X, FB) |
+| `sources.txt` | Daftar akun meme yang dipantau, satu per baris: `<platform> <akun>` |
 | `scripts/social_top.py` | Cari meme acak di Instagram (hashtag) + X (pencarian) [+ Facebook per page], simpan metadata seragam ke `data/` |
 | `scripts/login.py` | Wizard login: Reddit API, Instagram, X, Facebook — kamu login sendiri, script cuma memverifikasi |
 | `setup.ps1` | Setup otomatis di Windows (venv, paket, Node, Chromium, `.env`, lalu wizard login) |
@@ -162,6 +164,30 @@ Perintah intinya (bisa dijalankan langsung di PowerShell):
 ```powershell
 gallery-dl --range 1-3 --directory downloads/memes --write-metadata "https://www.reddit.com/r/memes/top/?t=day"
 ```
+
+### `scripts/meme_accounts.py` — post terpopuler dari akun meme (cara utama)
+
+Pencarian hashtag/kata kunci hampir selalu memberi spam. Yang benar-benar berguna adalah
+memantau **akun/page meme** yang sudah kamu tahu bagus. Daftarkan di `sources.txt`:
+
+```
+tiktok    @rankedmemes
+instagram rankedmemes
+x         <akun>
+facebook  <page>
+```
+
+```powershell
+python scripts/meme_accounts.py                    # 10 post terpopuler (dari 30 terbaru) per akun
+python scripts/meme_accounts.py -n 20 --download   # + unduh medianya ke downloads/<platform>/<akun>/
+python scripts/meme_accounts.py --latest -n 5      # 5 post terbaru per akun
+python scripts/meme_accounts.py -s "tiktok @akunlain"   # sumber tambahan tanpa mengedit sources.txt
+```
+
+- **TikTok** tidak butuh login; video diunduh lewat yt-dlp yang otomatis memilih versi
+  **tanpa watermark**. Ini sumber meme video terbaik.
+- Instagram/X/Facebook memakai cookie browser dari `scripts/login.py`.
+- Hasil: `data/accounts_<tanggal>_<jam>.json` (format sama dengan script lain, plus `akun`, `views`).
 
 ### `scripts/social_top.py` — meme acak dari Instagram + X (+ Facebook)
 
