@@ -24,9 +24,10 @@ PY = sys.executable
 PLATFORMS = ["browser", "reddit", "instagram", "x", "facebook"]
 BROWSERS = ["firefox", "chrome", "edge", "brave"]
 
-# URL publik untuk tes cookie. Kalau salah satu mati, wizard akan minta URL lain.
+# URL publik untuk tes cookie X. Kalau mati, wizard akan minta URL lain.
 X_TEST_URL = "https://x.com/NASA/media"
-FB_TEST_URL = "https://www.facebook.com/nasa/videos/"
+# Facebook: URL halaman video tidak didukung yt-dlp, jadi wizard minta URL reel dari user
+# dan menyimpannya di .env (FACEBOOK_TEST_URL) untuk --check berikutnya.
 
 
 def hr(title):
@@ -233,7 +234,10 @@ def setup_x():
 
 # ---------------------------------------------------------------- facebook
 def check_facebook(url=None):
-    url = url or os.environ.get("FACEBOOK_TEST_URL") or FB_TEST_URL
+    url = url or os.environ.get("FACEBOOK_TEST_URL")
+    if not url:
+        fail("Facebook: belum ada URL tes (jalankan wizard: python scripts/login.py --only facebook)")
+        return False
     code, out = run([PY, "-m", "yt_dlp", "--cookies-from-browser", browser(), "--simulate",
                      "--no-warnings", "--print", "title", "--playlist-items", "1", url], timeout=120)
     if code == 0 and out:
@@ -248,9 +252,10 @@ def setup_facebook():
     print(f"  Buka https://www.facebook.com di {browser()} dan login.")
     open_url("https://www.facebook.com/")
     input("  Tekan Enter setelah login selesai... ")
-    if check_facebook():
+    if os.environ.get("FACEBOOK_TEST_URL") and check_facebook():
         return True
-    url = ask("Tes dengan URL video/reel FB yang bisa kamu lihat, kosong = lewati")
+    print("  Buka satu reel/video FB apa saja di browser, salin URL-nya (bentuk facebook.com/reel/...)")
+    url = ask("URL reel/video FB untuk tes, kosong = lewati")
     if url:
         set_env("FACEBOOK_TEST_URL", url)
         return check_facebook(url)
