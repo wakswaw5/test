@@ -10,6 +10,7 @@ lihat [Catatan etika & legal](#catatan-etika--legal) di bawah.
 |---|---|
 | `scripts/reddit_top.py` | Ambil N post teratas subreddit lewat Reddit API (PRAW), simpan metadata ke `data/` |
 | `scripts/gallery_dl_top.sh` | Contoh gallery-dl: unduh 3 gambar teratas harian r/memes (tanpa API key) |
+| `scripts/social_top.py` | Cari meme acak di Instagram (hashtag) + X (pencarian) [+ Facebook per page], simpan metadata seragam ke `data/` |
 | `scripts/login.py` | Wizard login: Reddit API, Instagram, X, Facebook — kamu login sendiri, script cuma memverifikasi |
 | `setup.ps1` | Setup otomatis di Windows (venv, paket, Node, Chromium, `.env`, lalu wizard login) |
 | `node/` | Project Node.js dengan crawlee + playwright untuk scraping halaman yang butuh JavaScript |
@@ -161,6 +162,27 @@ Perintah intinya (bisa dijalankan langsung di PowerShell):
 ```powershell
 gallery-dl --range 1-3 --directory downloads/memes --write-metadata "https://www.reddit.com/r/memes/top/?t=day"
 ```
+
+### `scripts/social_top.py` — meme acak dari Instagram + X (+ Facebook)
+
+Butuh login lewat `scripts/login.py` dulu (cookie dibaca dari `COOKIE_BROWSER`).
+
+```powershell
+python scripts/social_top.py                              # instagram + x, kata kunci acak, 10 post per platform
+python scripts/social_top.py -q "meme kucing" -n 15       # kata kunci sendiri
+python scripts/social_top.py -p x -t latest               # X: terbaru, bukan top
+python scripts/social_top.py -p facebook --fb-page 9gag   # FB tidak punya pencarian: harus per page
+python scripts/social_top.py --download                   # + unduh maks. 5 file media (tes)
+```
+
+Hasil: `data/social_<tanggal>_<jam>.json`, format sama dengan `reddit_top.py` plus `platform`,
+`query`, dan untuk X: `retweet`, `views`. Kata kunci acak diambil dari daftar `QUERIES_X` /
+`TAGS_IG` di atas file — edit sesuka hati.
+
+Catatan:
+- **Watermark tidak bisa dideteksi otomatis.** Cek manual; metadata `author` membantu melacak sumber.
+- Instagram hashtag dan pencarian X hanya jalan dengan akun login; pakai akun sekunder.
+- Facebook: gallery-dl/yt-dlp tidak punya pencarian FB, hanya foto dari satu page publik.
 
 ### yt-dlp — video dari satu URL
 
