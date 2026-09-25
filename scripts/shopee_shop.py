@@ -174,6 +174,7 @@ def scrape(shop, max_items, detail, headless=False, debug=False):
     items, seen = {}, set()
     detail_box = {}
     api_log = []
+    phase = {"listing": True}
 
     def on_response(resp):
         url = resp.url
@@ -188,12 +189,13 @@ def scrape(shop, max_items, detail, headless=False, debug=False):
         if debug:
             api_log.append(url)
         try:
-            for lst in find_item_lists(data):
-                for it in lst:
-                    rec = parse_list_item(it)
-                    if rec["itemid"] and rec["judul"] and rec["itemid"] not in seen:
-                        seen.add(rec["itemid"])
-                        items[rec["itemid"]] = rec
+            if phase["listing"]:
+                for lst in find_item_lists(data):
+                    for it in lst:
+                        rec = parse_list_item(it)
+                        if rec["itemid"] and rec["judul"] and rec["itemid"] not in seen:
+                            seen.add(rec["itemid"])
+                            items[rec["itemid"]] = rec
             d = find_detail(data)
             if d:
                 iid = d.get("item_id") or d.get("itemid")
@@ -239,29 +241,39 @@ def scrape(shop, max_items, detail, headless=False, debug=False):
         if not items:                                         # belum ada respons daftar produk
             page.wait_for_timeout(4000)
 
+        def merge_dom():
+            for rec in dom_items(page):
+                if rec["itemid"] not in seen:
+                    seen.add(rec["itemid"])
+                    items[rec["itemid"]] = rec
+
         # scroll + halaman berikutnya sampai cukup
         pages = 0
         while len(items) < max_items and pages < 50:
             for _ in range(6):
                 page.mouse.wheel(0, 1500)
                 page.wait_for_timeout(600)
+            merge_dom()
             before = len(items)
-            nxt = page.locator("button.shopee-icon-button--right, button[aria-label='next page'], .shopee-button-next")
+            nxt = page.locator("button.shopee-icon-button--right, button[aria-label='next page'], "
+                               ".shopee-button-next, button.shopee-mini-page-controller__next-btn")
             if nxt.count() == 0 or nxt.first.is_disabled():
                 break
             nxt.first.click()
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(3500)
             pages += 1
+            merge_dom()
             if len(items) == before:
                 break
-        if not items:
-            for rec in dom_items(page):
-                if rec["itemid"] not in seen:
-                    seen.add(rec["itemid"])
-                    items[rec["itemid"]] = rec
-            if items:
-                print("  (daftar dibaca dari tampilan halaman; foto/harga varian diambil saat buka tiap produk)")
-        print(f"  {len(items)} produk ditemukan")
+        phase["listing"] = False
+
+        # buang produk toko lain (rekomendasi Shopee ikut tertangkap): pakai shopid terbanyak
+        shopids = [r["shopid"] for r in items.values() if r.get("shopid")]
+        if shopids:
+            shop_id = max(set(shopids), key=shopids.count)
+            for k in [k for k, r in items.items() if r.get("shopid") not in (shop_id, None)]:
+                del items[k]
+        print(f"  {len(items)} produk ditemukan ({pages + 1} halaman)")
         if debug:
             DATA_DIR.mkdir(exist_ok=True)
             (DATA_DIR / "shopee_debug.txt").write_text("\n".join(api_log), encoding="utf-8")
@@ -318,13 +330,21 @@ def download(shop, recs):
         nonlocal n
         if path.exists():
             return
-        try:
-            r = s.get(url, timeout=60)
-            r.raise_for_status()
-            path.write_bytes(r.content)
-            n += 1
-        except Exception as e:  # noqa: BLE001
-            print(f"  gagal {url[:70]}: {e}", file=sys.stderr)
+        for attempt in range(3):
+            try:
+                with s.get(url, timeout=90, stream=True) as r:
+                    r.raise_for_status()
+                    tmp = path.with_suffix(path.suffix + ".part")
+                    with open(tmp, "wb") as f:
+                        for chunk in r.iter_content(1 << 16):
+                            f.write(chunk)
+                    tmp.replace(path)
+                n += 1
+                return
+            except Exception as e:  # noqa: BLE001
+                if attempt == 2:
+                    print(f"  gagal {url[:70]}: {e}", file=sys.stderr)
+                time.sleep(2)
 
     for r in recs:
         title = slug(r["judul"])
