@@ -140,14 +140,35 @@ def scrape(shop, max_items, detail, headless=False):
         page = ctx.new_page()
         page.on("response", on_response)
 
+        shop_url = f"https://shopee.co.id/{shop}#product_list"
+
+        def goto(url):
+            """goto yang tahan terhadap redirect Shopee (ke login/verifikasi)."""
+            try:
+                page.goto(url, wait_until="domcontentloaded")
+            except Exception as e:  # noqa: BLE001 — "interrupted by another navigation" = redirect
+                if "interrupted" not in str(e):
+                    raise
+            page.wait_for_timeout(4000)
+
         print(f"[shopee] membuka toko {shop} ...")
-        page.goto(f"https://shopee.co.id/{shop}#product_list", wait_until="domcontentloaded")
-        page.wait_for_timeout(5000)
-        if "login" in page.url or page.locator("text=Log in").count() and not items:
-            print("  Shopee minta login/verifikasi. Selesaikan di jendela browser, lalu tekan Enter di sini.")
-            input("  Enter kalau sudah... ")
-            page.goto(f"https://shopee.co.id/{shop}#product_list", wait_until="domcontentloaded")
-            page.wait_for_timeout(5000)
+        goto(shop_url)
+        if "/buyer/login" in page.url or "/verify" in page.url:
+            print("  Shopee mewajibkan LOGIN untuk melihat toko.")
+            print("  Login di JENDELA CHROMIUM yang terbuka (bukan Firefox — ini profil terpisah).")
+            print("  Script menunggu sampai login selesai; tidak perlu tekan apa pun di sini.")
+            for _ in range(600):                              # tunggu sampai 10 menit
+                page.wait_for_timeout(1000)
+                if "/buyer/login" not in page.url and "/verify" not in page.url:
+                    break
+            else:
+                sys.exit("  Login tidak selesai dalam 10 menit. Ulangi perintahnya setelah login.")
+            print("  Login terdeteksi, lanjut.")
+            page.wait_for_timeout(2000)
+            if shop not in page.url:
+                goto(shop_url)
+        if not items:                                         # belum ada respons daftar produk
+            page.wait_for_timeout(4000)
 
         # scroll + halaman berikutnya sampai cukup
         pages = 0
