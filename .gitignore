@@ -1,0 +1,24 @@
+# Hasil unduhan dan file media — jangan pernah masuk git
+downloads/
+*.mp4
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webm
+*.webp
+
+# Kredensial & profil browser Playwright (berisi cookie login)
+.env
+.pw-profile/
+
+# Node.js
+node/node_modules/
+node/storage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Metadata JSON di data/ BOLEH di-commit
