@@ -55,23 +55,36 @@ def rupiah(v):
 
 
 # ---------------------------------------------------------------- parsing respons Shopee
-def parse_list_item(it):
-    """Item dari /api/v4/shop/search_items (atau recommend). Kembalikan dict dasar."""
-    it = it.get("item_basic", it)
+def parse_list_item(raw):
+    """Item dari /api/v4/shop/search_items. Mendukung dua format:
+    - lama : {"item_basic": {name, price, images, ...}}
+    - baru : {"itemid", "shopid", "item_card_displayed_asset": {name, image, images},
+              "item_card_display_price": {price, price_min, price_max},
+              "item_card_display_sold_count": {historical_sold_count}}   (item_card_use_scene)
+    """
+    it = raw.get("item_basic") or raw
+    asset = raw.get("item_card_displayed_asset") or {}
+    price = raw.get("item_card_display_price") or {}
+    sold = raw.get("item_card_display_sold_count") or {}
     videos = []
-    for v in it.get("video_info_list") or []:
+    for v in (it.get("video_info_list") or asset.get("video_info_list") or []):
         fmt = v.get("default_format") or (v.get("formats") or [{}])[0]
         if fmt.get("url"):
             videos.append(fmt["url"])
+    images = it.get("images") or asset.get("images") or [it.get("image") or asset.get("image")]
+    itemid = raw.get("itemid") or it.get("itemid") or raw.get("item_id") or it.get("item_id")
+    shopid = raw.get("shopid") or it.get("shopid") or raw.get("shop_id") or it.get("shop_id")
     return {
-        "itemid": it.get("itemid"), "shopid": it.get("shopid"),
-        "judul": it.get("name"),
-        "harga": rupiah(it.get("price")), "harga_min": rupiah(it.get("price_min")),
-        "harga_max": rupiah(it.get("price_max")),
-        "stok": it.get("stock"), "terjual": it.get("historical_sold") or it.get("sold"),
-        "foto": [IMG_CDN.format(h) for h in (it.get("images") or [it.get("image")]) if h],
+        "itemid": itemid, "shopid": shopid,
+        "judul": it.get("name") or asset.get("name"),
+        "harga": rupiah(it.get("price") or price.get("price")),
+        "harga_min": rupiah(it.get("price_min") or price.get("price_min")),
+        "harga_max": rupiah(it.get("price_max") or price.get("price_max")),
+        "stok": it.get("stock"),
+        "terjual": it.get("historical_sold") or it.get("sold") or sold.get("historical_sold_count") or sold.get("sold_count"),
+        "foto": [IMG_CDN.format(h) for h in images if h],
         "video": videos,
-        "url": f"https://shopee.co.id/product/{it.get('shopid')}/{it.get('itemid')}",
+        "url": f"https://shopee.co.id/product/{shopid}/{itemid}",
         "varian": [],
     }
 
@@ -109,8 +122,10 @@ def find_item_lists(obj, depth=0):
         return
     if isinstance(obj, list):
         if obj and all(isinstance(x, dict) for x in obj[:3]):
-            probe = obj[0].get("item_basic", obj[0])
-            if ("itemid" in probe or "item_id" in probe) and ("name" in probe or "title" in probe):
+            probe = obj[0].get("item_basic") or obj[0]
+            has_id = "itemid" in probe or "item_id" in probe or "itemid" in obj[0]
+            has_name = "name" in probe or "title" in probe or "item_card_displayed_asset" in obj[0]
+            if has_id and has_name:
                 yield obj
                 return
         for x in obj:
@@ -247,23 +262,19 @@ def scrape(shop, max_items, detail, headless=False, debug=False):
                     seen.add(rec["itemid"])
                     items[rec["itemid"]] = rec
 
-        # scroll + halaman berikutnya sampai cukup
+        # halaman 0,1,2,... lewat URL ?page=N (tiap halaman = search_items offset 30*N)
         pages = 0
-        while len(items) < max_items and pages < 50:
+        for pg in range(50):
+            if pg > 0:
+                goto(f"https://shopee.co.id/{shop}?page={pg}&sortBy=pop#product_list")
             for _ in range(6):
                 page.mouse.wheel(0, 1500)
-                page.wait_for_timeout(600)
-            merge_dom()
+                page.wait_for_timeout(500)
             before = len(items)
-            nxt = page.locator("button.shopee-icon-button--right, button[aria-label='next page'], "
-                               ".shopee-button-next, button.shopee-mini-page-controller__next-btn")
-            if nxt.count() == 0 or nxt.first.is_disabled():
-                break
-            nxt.first.click()
-            page.wait_for_timeout(3500)
-            pages += 1
             merge_dom()
-            if len(items) == before:
+            pages = pg + 1
+            print(f"  halaman {pg + 1}: total {len(items)} produk")
+            if len(items) >= max_items or (pg > 0 and len(items) == before):
                 break
         phase["listing"] = False
 
