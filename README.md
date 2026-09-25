@@ -12,6 +12,7 @@ lihat [Catatan etika & legal](#catatan-etika--legal) di bawah.
 | `scripts/gallery_dl_top.sh` | Contoh gallery-dl: unduh 3 gambar teratas harian r/memes (tanpa API key) |
 | `scripts/meme_accounts.py` | **Cara utama**: post terpopuler dari akun/page meme di `sources.txt` (TikTok tanpa login & tanpa watermark, IG, X, FB) |
 | `sources.txt` | Daftar akun meme yang dipantau, satu per baris: `<platform> <akun>` |
+| `scripts/shopee_shop.py` | Produk satu toko Shopee: judul, varian, harga, stok + unduh foto & video (Playwright, browser sungguhan) |
 | `scripts/social_top.py` | Cari meme acak di Instagram (hashtag) + X (pencarian) [+ Facebook per page], simpan metadata seragam ke `data/` |
 | `scripts/login.py` | Wizard login: Reddit API, Instagram, X, Facebook — kamu login sendiri, script cuma memverifikasi |
 | `setup.ps1` | Setup otomatis di Windows (venv, paket, Node, Chromium, `.env`, lalu wizard login) |
@@ -188,6 +189,26 @@ python scripts/meme_accounts.py -s "tiktok @akunlain"   # sumber tambahan tanpa 
   **tanpa watermark**. Ini sumber meme video terbaik.
 - Instagram/X/Facebook memakai cookie browser dari `scripts/login.py`.
 - Hasil: `data/accounts_<tanggal>_<jam>.json` (format sama dengan script lain, plus `akun`, `views`).
+
+### `scripts/shopee_shop.py` — produk toko Shopee (judul, varian, harga, foto, video)
+
+Shopee memblokir semua request non-browser, jadi script ini membuka Chromium sungguhan
+(jendela terlihat) dan menyadap JSON yang Shopee kirim ke halamannya sendiri.
+
+```powershell
+pip install playwright
+python -m playwright install chromium            # sekali saja
+
+python scripts/shopee_shop.py https://shopee.co.id/addmaterial --download
+python scripts/shopee_shop.py addmaterial --max 30 --no-detail   # cepat, tanpa varian
+```
+
+- Hasil: `data/shopee_<toko>.csv` (judul, varian, harga_rp, stok, terjual, url) + `.json`.
+- Media: `downloads/shopee/<toko>/<judul>_1.jpg`, `<judul>__<varian>.jpg`, `<judul>.mp4`.
+- Tanpa `--no-detail`, script membuka tiap produk (±3 detik/produk) untuk harga dan foto per varian.
+- Kalau muncul captcha/login di jendela browser, selesaikan di situ lalu tekan Enter di terminal.
+  Profil browser disimpan di `.pw-profile/` (di-ignore git) supaya tidak diulang.
+- Foto/video produk milik penjual. Pakai untuk toko sendiri atau dengan izin.
 
 ### `scripts/social_top.py` — meme acak dari Instagram + X (+ Facebook)
 

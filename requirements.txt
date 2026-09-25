@@ -9,3 +9,5 @@ bdfr==2.6.2
 praw==7.7.1
 scrapy==2.19.0
 requests>=2.31
+# Shopee (scripts/shopee_shop.py): setelah pip install, jalankan: python -m playwright install chromium
+playwright>=1.47

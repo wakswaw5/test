@@ -8,8 +8,9 @@ downloads/
 *.webm
 *.webp
 
-# Kredensial
+# Kredensial & profil browser Playwright (berisi cookie login)
 .env
+.pw-profile/
 
 # Node.js
 node/node_modules/
