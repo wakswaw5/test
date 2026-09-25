@@ -103,8 +103,69 @@ def parse_detail(data, rec):
     return rec
 
 
+def find_item_lists(obj, depth=0):
+    """Cari (rekursif) list of dict yang tampak seperti daftar produk Shopee."""
+    if depth > 6:
+        return
+    if isinstance(obj, list):
+        if obj and all(isinstance(x, dict) for x in obj[:3]):
+            probe = obj[0].get("item_basic", obj[0])
+            if ("itemid" in probe or "item_id" in probe) and ("name" in probe or "title" in probe):
+                yield obj
+                return
+        for x in obj:
+            yield from find_item_lists(x, depth + 1)
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from find_item_lists(v, depth + 1)
+
+
+def find_detail(obj, depth=0):
+    """Cari dict produk yang punya models/tier_variations (respons detail produk)."""
+    if depth > 5 or not isinstance(obj, (dict, list)):
+        return None
+    if isinstance(obj, dict):
+        if ("models" in obj or "tier_variations" in obj) and ("item_id" in obj or "itemid" in obj):
+            return obj
+        for v in obj.values():
+            r = find_detail(v, depth + 1)
+            if r:
+                return r
+    else:
+        for v in obj:
+            r = find_detail(v, depth + 1)
+            if r:
+                return r
+    return None
+
+
+def dom_items(page, shopid_hint=None):
+    """Cadangan: baca kartu produk dari halaman (judul, harga, URL) kalau API tidak tertangkap."""
+    out = []
+    for a in page.locator("a[href*='-i.']").all():
+        try:
+            href = a.get_attribute("href") or ""
+            m = re.search(r"-i\.(\d+)\.(\d+)", href)
+            if not m:
+                continue
+            text = a.inner_text().strip().splitlines()
+            text = [t.strip() for t in text if t.strip()]
+            price = next((t for t in text if t.startswith("Rp")), "")
+            title = next((t for t in text if not t.startswith("Rp") and len(t) > 8), "")
+            out.append({
+                "itemid": int(m.group(2)), "shopid": int(m.group(1)), "judul": title,
+                "harga": int(re.sub(r"[^\d]", "", price)) if price else None,
+                "harga_min": None, "harga_max": None, "stok": None, "terjual": None,
+                "foto": [], "video": [], "varian": [],
+                "url": "https://shopee.co.id" + href if href.startswith("/") else href,
+            })
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
 # ---------------------------------------------------------------- browser
-def scrape(shop, max_items, detail, headless=False):
+def scrape(shop, max_items, detail, headless=False, debug=False):
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -112,24 +173,32 @@ def scrape(shop, max_items, detail, headless=False):
 
     items, seen = {}, set()
     detail_box = {}
+    api_log = []
 
     def on_response(resp):
         url = resp.url
+        if "/api/" not in url and "shopee" not in url:
+            return
         try:
-            if "/api/v4/shop/search_items" in url or "/api/v4/shop/rcmd_items" in url:
-                data = resp.json()
-                for it in (data.get("items") or data.get("data", {}).get("items") or []):
+            if "json" not in (resp.headers.get("content-type") or ""):
+                return
+            data = resp.json()
+        except Exception:  # noqa: BLE001 — bukan JSON
+            return
+        if debug:
+            api_log.append(url)
+        try:
+            for lst in find_item_lists(data):
+                for it in lst:
                     rec = parse_list_item(it)
-                    if rec["itemid"] and rec["itemid"] not in seen:
+                    if rec["itemid"] and rec["judul"] and rec["itemid"] not in seen:
                         seen.add(rec["itemid"])
                         items[rec["itemid"]] = rec
-            elif "/api/v4/pdp/get_pc" in url:
-                data = resp.json()
-                d = data.get("data") or {}
-                iid = (d.get("item") or {}).get("item_id") or (d.get("item") or {}).get("itemid")
-                if iid:
-                    detail_box[iid] = d
-        except Exception:  # noqa: BLE001 — respons bukan JSON / bukan yang kita cari
+            d = find_detail(data)
+            if d:
+                iid = d.get("item_id") or d.get("itemid")
+                detail_box[iid] = {"item": d}
+        except Exception:  # noqa: BLE001
             pass
 
     with sync_playwright() as p:
@@ -185,7 +254,18 @@ def scrape(shop, max_items, detail, headless=False):
             pages += 1
             if len(items) == before:
                 break
+        if not items:
+            for rec in dom_items(page):
+                if rec["itemid"] not in seen:
+                    seen.add(rec["itemid"])
+                    items[rec["itemid"]] = rec
+            if items:
+                print("  (daftar dibaca dari tampilan halaman; foto/harga varian diambil saat buka tiap produk)")
         print(f"  {len(items)} produk ditemukan")
+        if debug:
+            DATA_DIR.mkdir(exist_ok=True)
+            (DATA_DIR / "shopee_debug.txt").write_text("\n".join(api_log), encoding="utf-8")
+            print(f"  debug: {len(api_log)} respons JSON dicatat di data/shopee_debug.txt")
 
         recs = list(items.values())[:max_items]
         if detail:
@@ -265,13 +345,14 @@ def main():
     ap.add_argument("--no-detail", action="store_true", help="jangan buka tiap produk (tanpa varian & harga per varian)")
     ap.add_argument("--download", action="store_true", help="unduh foto + video")
     ap.add_argument("--headless", action="store_true", help="tanpa jendela (lebih sering diblokir Shopee)")
+    ap.add_argument("--debug", action="store_true", help="catat semua endpoint JSON ke data/shopee_debug.txt")
     args = ap.parse_args()
 
     shop = shop_name(args.shop)
-    recs = scrape(shop, args.max, not args.no_detail, args.headless)
+    recs = scrape(shop, args.max, not args.no_detail, args.headless, args.debug)
     if not recs:
-        sys.exit("Tidak ada produk terbaca. Kalau jendela browser menampilkan captcha/login, "
-                 "selesaikan dulu lalu ulangi; profil tersimpan di .pw-profile/.")
+        sys.exit("Tidak ada produk terbaca. Ulangi dengan --debug lalu kirim data/shopee_debug.txt "
+                 "(daftar endpoint yang dipakai Shopee) supaya parser bisa disesuaikan.")
     write_outputs(shop, recs)
     if args.download:
         download(shop, recs)
